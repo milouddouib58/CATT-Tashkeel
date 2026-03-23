@@ -1,25 +1,24 @@
 """
-محرك التشكيل الآلي للنصوص العربية
-يستخدم نموذج CATT للتشكيل بدقة عالية
+محرك التشكيل الآلي - مع معالجة شاملة للأخطاء
 """
 
 import logging
 import time
 import re
-from typing import Optional, Dict, List
+import sys
+from typing import Dict, List, Optional
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(asctime)s [%(levelname)s] %(message)s'
 )
 logger = logging.getLogger(__name__)
 
 
 class ArabicDiacritizer:
-    """محرك التشكيل الرئيسي"""
+    """محرك التشكيل الرئيسي مع معالجة أخطاء شاملة"""
 
-    # الحركات العربية
-    DIACRITICS = {
+    DIACRITICS_MAP = {
         '\u064B': 'تنوين فتح',
         '\u064C': 'تنوين ضم',
         '\u064D': 'تنوين كسر',
@@ -35,23 +34,97 @@ class ArabicDiacritizer:
     )
 
     def __init__(self, fast_mode: bool = True):
-        """
-        تهيئة النموذج
-
-        Args:
-            fast_mode: True لاستخدام EncoderOnly (أسرع)
-                      False لاستخدام EncoderDecoder (أدق)
-        """
         self.fast_mode = fast_mode
         self.model = None
         self.is_loaded = False
+        self.model_type = ""
+        self.error_message = ""
         self._load_model()
 
+    def _check_dependencies(self) -> Dict[str, bool]:
+        """فحص جميع المتطلبات"""
+        deps = {}
+
+        # فحص PyTorch
+        try:
+            import torch
+            deps['torch'] = True
+            deps['torch_version'] = torch.__version__
+            deps['cuda'] = torch.cuda.is_available()
+            logger.info(f"PyTorch {torch.__version__} ✅")
+        except ImportError:
+            deps['torch'] = False
+            logger.error("PyTorch غير مثبت ❌")
+
+        # فحص transformers
+        try:
+            import transformers
+            deps['transformers'] = True
+            logger.info(f"Transformers {transformers.__version__} ✅")
+        except ImportError:
+            deps['transformers'] = False
+            logger.error("Transformers غير مثبت ❌")
+
+        # فحص sentencepiece
+        try:
+            import sentencepiece
+            deps['sentencepiece'] = True
+            logger.info("SentencePiece ✅")
+        except ImportError:
+            deps['sentencepiece'] = False
+            logger.warning("SentencePiece غير مثبت ⚠️")
+
+        # فحص catt_tashkeel
+        try:
+            import catt_tashkeel
+            deps['catt_tashkeel'] = True
+            logger.info("catt-tashkeel ✅")
+        except ImportError:
+            deps['catt_tashkeel'] = False
+            logger.error("catt-tashkeel غير مثبت ❌")
+
+        return deps
+
     def _load_model(self):
-        """تحميل النموذج"""
+        """تحميل النموذج مع معالجة كل الأخطاء المحتملة"""
+        logger.info("=" * 50)
+        logger.info("فحص المتطلبات...")
+        logger.info("=" * 50)
+
+        # فحص المتطلبات أولاً
+        deps = self._check_dependencies()
+
+        # التحقق من المتطلبات الأساسية
+        missing = []
+        if not deps.get('torch'):
+            missing.append('torch')
+        if not deps.get('transformers'):
+            missing.append('transformers')
+        if not deps.get('catt_tashkeel'):
+            missing.append('catt-tashkeel')
+
+        if missing:
+            self.error_message = (
+                f"مكتبات مفقودة: {', '.join(missing)}\n"
+                f"شغّل الأوامر التالية:\n"
+            )
+            for lib in missing:
+                if lib == 'torch':
+                    self.error_message += (
+                        "pip install torch --index-url "
+                        "https://download.pytorch.org/whl/cpu\n"
+                    )
+                else:
+                    self.error_message += f"pip install {lib}\n"
+
+            logger.error(self.error_message)
+            self.is_loaded = False
+            return
+
+        # محاولة تحميل النموذج
         try:
             logger.info("جاري تحميل نموذج CATT...")
-            start_time = time.time()
+            start = time.time()
 
             if self.fast_mode:
                 from catt_tashkeel import CATTEncoderOnly
@@ -62,126 +135,25 @@ class ArabicDiacritizer:
                 self.model = CATTEncoderDecoder()
                 self.model_type = "EncoderDecoder (دقيق)"
 
-            elapsed = time.time() - start_time
-            logger.info(f"تم تحميل النموذج {self.model_type} في {elapsed:.2f} ثانية")
+            elapsed = time.time() - start
+            logger.info(
+                f"✅ تم تحميل {self.model_type} "
+                f"في {elapsed:.1f} ثانية"
+            )
             self.is_loaded = True
+            self.error_message = ""
 
-        except ImportError as e:
-            logger.error(f"خطأ في استيراد المكتبة: {e}")
-            logger.error("تأكد من تثبيت: pip install catt-tashkeel")
-            self.is_loaded = False
+        except OSError as e:
+            self.error_message = (
+                f"خطأ في تحميل ملفات النموذج: {e}\n"
+                "قد تحتاج اتصال إنترنت لتحميل الأوزان"
+            )
+            logger.error(self.error_message)
 
-        except Exception as e:
-            logger.error(f"خطأ في تحميل النموذج: {e}")
-            self.is_loaded = False
-
-    def process_text(self, text: str) -> Dict:
-        """
-        تشكيل النص وإرجاع النتائج مع إحصائيات
-
-        Args:
-            text: النص العربي بدون تشكيل
-
-        Returns:
-            قاموس يحتوي على النص المشكل والإحصائيات
-        """
-        result = {
-            'original': text,
-            'diacritized': '',
-            'success': False,
-            'error': None,
-            'stats': {},
-            'processing_time': 0
-        }
-
-        # التحقق من النص
-        if not text or not text.strip():
-            result['error'] = "الرجاء إدخال نص عربي"
-            return result
-
-        if not self.is_loaded:
-            result['error'] = "النموذج غير محمل. تأكد من تثبيت catt-tashkeel"
-            return result
-
-        try:
-            # إزالة التشكيل الموجود مسبقاً
-            clean_text = self.strip_diacritics(text)
-
-            # التشكيل
-            start_time = time.time()
-            diacritized = self.model.do_tashkeel(clean_text, verbose=False)
-            elapsed = time.time() - start_time
-
-            # حساب الإحصائيات
-            stats = self._calculate_stats(clean_text, diacritized)
-
-            result['diacritized'] = diacritized
-            result['success'] = True
-            result['processing_time'] = round(elapsed, 3)
-            result['stats'] = stats
-
-        except Exception as e:
-            logger.error(f"خطأ في التشكيل: {e}")
-            result['error'] = str(e)
-
-        return result
-
-    def quick_tashkeel(self, text: str) -> str:
-        """تشكيل سريع - يرجع النص المشكل فقط"""
-        if not text or not text.strip():
-            return ""
-        if not self.is_loaded:
-            return "⚠️ النموذج غير محمل"
-        try:
-            clean = self.strip_diacritics(text)
-            return self.model.do_tashkeel(clean, verbose=False)
-        except Exception as e:
-            return f"❌ خطأ: {e}"
-
-    def strip_diacritics(self, text: str) -> str:
-        """إزالة جميع الحركات من النص"""
-        return self.DIACRITIC_PATTERN.sub('', text)
-
-    def _calculate_stats(self, original: str, diacritized: str) -> Dict:
-        """حساب إحصائيات التشكيل"""
-        arabic_chars = len(re.findall(r'[\u0600-\u06FF]', original))
-        diacritics_added = len(re.findall(
-            r'[\u064B-\u0652]', diacritized
-        ))
-        words = len(original.split())
-
-        # عدد كل نوع من الحركات
-        diacritic_counts = {}
-        for d, name in self.DIACRITICS.items():
-            count = diacritized.count(d)
-            if count > 0:
-                diacritic_counts[name] = count
-
-        return {
-            'arabic_chars': arabic_chars,
-            'total_diacritics': diacritics_added,
-            'words': words,
-            'coverage': round(
-                (diacritics_added / arabic_chars * 100), 1
-            ) if arabic_chars > 0 else 0,
-            'diacritic_breakdown': diacritic_counts
-        }
-
-    def batch_process(self, texts: List[str]) -> List[Dict]:
-        """معالجة مجموعة من النصوص دفعة واحدة"""
-        return [self.process_text(text) for text in texts]
-
-
-# ===== للاختبار المباشر =====
-if __name__ == "__main__":
-    d = ArabicDiacritizer(fast_mode=True)
-    test = "بسم الله الرحمن الرحيم"
-    result = d.process_text(test)
-
-    if result['success']:
-        print(f"الأصلي: {result['original']}")
-        print(f"المشكل: {result['diacritized']}")
-        print(f"الوقت: {result['processing_time']} ثانية")
-        print(f"الإحصائيات: {result['stats']}")
-    else:
-        print(f"خطأ: {result['error']}")
+        except RuntimeError as e:
+            error_str = str(e)
+            if "CUDA" in error_str or "GPU" in error_str:
+                self.error_message = (
+                    "خطأ في GPU/CUDA. جرّب تثبيت نسخة CPU:\n"
+                    "pip install torch --index-url "
+                
