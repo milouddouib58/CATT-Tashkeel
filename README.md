@@ -28,7 +28,7 @@
 
 ```bash
 # استنساخ المشروع
-git clone https://github.com/YOUR_USERNAME/arabic-diacritizer.git
+git clone https://github.com/milouddouib58/arabic-diacritizer.git
 cd arabic-diacritizer
 
 # تشغيل سكريبت الإعداد
