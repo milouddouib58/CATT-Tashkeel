@@ -1077,3 +1077,52 @@ with tab3:
 ```bash
 pip install catt-tashkeel streamlit torch transformers
 streamlit run app_streamlit.py
+المتطلبات 
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchaudio
+transformers
+sentencepiece
+protobuf
+catt-tashkeel
+streamlit
+""")
+
+st.markdown("---")
+st.markdown("#### 🖥️ حالة النظام الحالية")
+
+deps = check_dependencies()
+tbl = '<table class="diag-tbl">'
+tbl += "<tr><th>المكتبة</th><th>الحالة</th><th>الإصدار</th></tr>"
+for ln, li in deps.items():
+    if li["installed"]:
+        tbl += (
+            f"<tr><td>{ln}</td>"
+            f'<td class="clr-ok">✅ مثبت</td>'
+            f"<td>{li['version']}</td></tr>"
+        )
+    else:
+        tbl += (
+            f"<tr><td>{ln}</td>"
+            f'<td class="clr-fail">❌ غير مثبت</td>'
+            f"<td>—</td></tr>"
+        )
+tbl += "</table>"
+st.markdown(tbl, unsafe_allow_html=True)
+
+st.markdown(
+    f"- **Python:** `{sys.version}`\n"
+    f"- **النموذج:** `{'✅ محمل — ' + diacritizer.model_type if MODEL_OK else '❌ غير محمل (وضع تجريبي)'}`"
+)
+
+if DEMO_MODE:
+    st.markdown("---")
+    st.markdown("#### 📝 النماذج المتوفرة في الوضع التجريبي:")
+    for orig_text, dia_text in DEMO_PAIRS.items():
+        st.markdown(f"- **{orig_text}**")
+        st.markdown(f"  ← _{dia_text}_")
+الفوتر
+st.markdown("---")
+st.markdown("""
+
+<div class="app-footer"> <p> ✍️ <strong>مُشكِّل النصوص العربية</strong> &nbsp;|&nbsp; نموذج CATT للذكاء الاصطناعي </p> <p style="margin-top:0.3rem;"> صُنع بـ ❤️ للغة العربية &nbsp;|&nbsp; <a href="https://github.com/GT-SALT/CATT" target="_blank">GitHub</a> </p> </div> """, unsafe_allow_html=True) ```
