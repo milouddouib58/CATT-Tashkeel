@@ -1,19 +1,8 @@
-# PyTorch - يجب تثبيته أولاً
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch>=2.0.0
-torchaudio>=2.0.0
-torchvision>=0.15.0
-
-# Transformers
+torch
+torchaudio
 transformers>=4.30.0
-sentencepiece>=0.1.99
-protobuf>=3.20.0
-
-# CATT Tashkeel - نموذج التشكيل
-catt-tashkeel>=0.1.0
-
-# Streamlit
+sentencepiece
+protobuf
+catt-tashkeel
 streamlit>=1.28.0
-
-# Gradio (اختياري)
-gradio>=4.0.0
