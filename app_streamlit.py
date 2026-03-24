@@ -1,129 +1,163 @@
 """
-✍️ مُشكِّل النصوص العربية — نقطة البداية
-=============================================
-
-هذا هو الملف الرئيسي الذي يشغّل تطبيق Streamlit.
-يستورد جميع المكونات من الوحدات الفرعية ويجمعها معاً.
-
-التشغيل:
-    streamlit run app_streamlit.py
+مُشكِّل النصوص العربية - CATT Tashkeel
+نقطة البداية الرئيسية للتطبيق
 """
 
 import streamlit as st
 import logging
+import sys
+import os
 
-# ── إعداد السجلات ──
+# إضافة مسار المشروع
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 
-# ══════════════════════════════════════════════════════
-#          1. إعدادات الصفحة (يجب أن تكون أولاً)
-# ══════════════════════════════════════════════════════
+# ══════════════════════════════════════════
+#    إعدادات الصفحة - يجب أن تكون أولاً
+# ══════════════════════════════════════════
 st.set_page_config(
-    page_title="مُشكِّل النصوص العربية | CATT",
+    page_title="مُشكِّل النصوص العربية",
     page_icon="✍️",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ══════════════════════════════════════════════════════
-#          2. الاستيرادات (بعد set_page_config)
-# ══════════════════════════════════════════════════════
-from core.engine import ArabicDiacritizer
-from core.samples import SAMPLE_CATEGORIES
+# ══════════════════════════════════════════
+#    الاستيرادات
+# ══════════════════════════════════════════
+try:
+    from core.engine import ArabicDiacritizer
+    from core.samples import SAMPLE_CATEGORIES
+    from helpers import do_tashkeel, check_dependencies
+    from ui.styles import inject_styles
+    from ui.sidebar import render_sidebar
+    from ui.tab_tashkeel import render_tab_tashkeel
+    from ui.tab_file import render_tab_file
+    from ui.tab_info import render_tab_info
 
-from ui.styles import inject_styles
-from ui.sidebar import render_sidebar
-from ui.tab_tashkeel import render_tab_tashkeel
-from ui.tab_file import render_tab_file
-from ui.tab_info import render_tab_info
+    IMPORTS_OK = True
+    IMPORT_ERROR = ""
+except ImportError as e:
+    IMPORTS_OK = False
+    IMPORT_ERROR = str(e)
 
-# ══════════════════════════════════════════════════════
-#          3. حقن أنماط CSS
-# ══════════════════════════════════════════════════════
-inject_styles()
+# ══════════════════════════════════════════
+#    التطبيق الرئيسي
+# ══════════════════════════════════════════
+def main():
+    """الدالة الرئيسية للتطبيق"""
 
-# ══════════════════════════════════════════════════════
-#          4. تحميل النموذج (مرة واحدة)
-# ══════════════════════════════════════════════════════
+    if not IMPORTS_OK:
+        st.error(
+            f"❌ خطأ في استيراد الملفات:\n\n"
+            f"`{IMPORT_ERROR}`\n\n"
+            f"تأكد من وجود جميع الملفات في المستودع."
+        )
+        st.markdown("### الملفات المطلوبة:")
+        st.code(
+            "core/__init__.py\n"
+            "core/engine.py\n"
+            "core/samples.py\n"
+            "ui/__init__.py\n"
+            "ui/styles.py\n"
+            "ui/sidebar.py\n"
+            "ui/tab_tashkeel.py\n"
+            "ui/tab_file.py\n"
+            "ui/tab_info.py\n"
+            "helpers.py",
+            language=None,
+        )
+        st.stop()
 
-@st.cache_resource(show_spinner=False)
-def load_model(fast_mode: bool = True):
-    """تحميل النموذج وتخزينه مؤقتاً"""
-    return ArabicDiacritizer(fast_mode=fast_mode)
+    # حقن CSS
+    inject_styles()
 
-
-# ══════════════════════════════════════════════════════
-#          5. الشريط الجانبي
-# ══════════════════════════════════════════════════════
-fast_mode, selected_sample, strip_mode = render_sidebar(
-    SAMPLE_CATEGORIES
-)
-
-# تحديث الإدخال إذا ضُغط نموذج جاهز
-if selected_sample is not None:
-    st.session_state["input_text"] = selected_sample
-
-# ══════════════════════════════════════════════════════
-#          6. الهيدر الرئيسي
-# ══════════════════════════════════════════════════════
-st.markdown("""
-<div class="hero">
-    <span class="hero-icon">✍️</span>
-    <h1>مُشكِّل النصوص العربية</h1>
-    <p>تشكيل آلي ذكي باستخدام نموذج CATT للذكاء الاصطناعي</p>
-</div>
-""", unsafe_allow_html=True)
-
-# ══════════════════════════════════════════════════════
-#          7. تحميل النموذج وعرض الحالة
-# ══════════════════════════════════════════════════════
-with st.spinner("🔄 جاري تحميل النموذج... قد يستغرق دقيقة"):
-    diacritizer = load_model(fast_mode=fast_mode)
-
-MODEL_OK = diacritizer.is_loaded
-IS_DEMO = not MODEL_OK
-
-if MODEL_OK:
-    st.markdown(
-        f'<div class="badge badge-ok">'
-        f"✅ النموذج جاهز &nbsp;|&nbsp; {diacritizer.model_type}"
-        f"</div>",
-        unsafe_allow_html=True,
+    # الشريط الجانبي
+    fast_mode, selected_sample, strip_mode = render_sidebar(
+        SAMPLE_CATEGORIES
     )
-else:
+
+    if selected_sample is not None:
+        st.session_state["input_text"] = selected_sample
+
+    # الهيدر
     st.markdown(
-        '<div class="badge badge-demo">'
-        "⚡ وضع العرض التجريبي — نماذج مُشكّلة مسبقاً"
+        '<div class="hero">'
+        '<span class="hero-icon">✍️</span>'
+        "<h1>مُشكِّل النصوص العربية</h1>"
+        "<p>تشكيل آلي ذكي باستخدام نموذج CATT</p>"
         "</div>",
         unsafe_allow_html=True,
     )
 
-    with st.expander(
-        "🔍 لماذا لم يُحمّل النموذج؟ (اضغط للتفاصيل)"
-    ):
-        st.error(f"**السبب:**\n\n{diacritizer.load_error}")
+    # تحميل النموذج
+    diacritizer = load_model(fast_mode)
+
+    model_ok = diacritizer.is_loaded
+    is_demo = not model_ok
+
+    # عرض حالة النموذج
+    if model_ok:
         st.markdown(
-            "### 🛠️ الحل:\n\n"
-            "**1. تأكد من ملف `requirements.txt`:**\n"
-            "```\n"
-            "--extra-index-url "
-            "https://download.pytorch.org/whl/cpu\n"
-            "torch\n"
-            "transformers\n"
-            "sentencepiece\n"
-            "protobuf\n"
-            "catt-tashkeel\n"
-            "streamlit\n"
-            "```\n\n"
-            "**2. أضف ملف `packages.txt`:**\n"
-            "```\n"
-            "build-essential\n"
-            "libsndfile1\n"
-            "```\n\n"
-            "**3. أو شغّل محلياً:**\n"
+            f'<div class="badge badge-ok">'
+            f"✅ النموذج جاهز | {diacritizer.model_type}"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div class="badge badge-demo">'
+            "⚡ وضع تجريبي — نماذج مُشكّلة مسبقاً"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        _show_error_details(diacritizer.load_error)
+
+    st.markdown("")
+
+    # التبويبات
+    tab1, tab2, tab3 = st.tabs(
+        ["✍️ تشكيل فوري", "📄 معالجة ملف", "ℹ️ معلومات"]
+    )
+
+    with tab1:
+        render_tab_tashkeel(diacritizer, is_demo, strip_mode)
+
+    with tab2:
+        render_tab_file(diacritizer, is_demo)
+
+    with tab3:
+        render_tab_info(diacritizer, model_ok)
+
+    # الفوتر
+    st.markdown("---")
+    st.markdown(
+        '<div class="app-footer">'
+        "<p>✍️ <strong>مُشكِّل النصوص العربية</strong>"
+        " | نموذج CATT</p>"
+        "<p>صُنع بـ ❤️ للغة العربية</p>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+@st.cache_resource(show_spinner=False)
+def load_model(fast_mode):
+    """تحميل النموذج مرة واحدة"""
+    with st.spinner("🔄 جاري تحميل النموذج..."):
+        return ArabicDiacritizer(fast_mode=fast_mode)
+
+
+def _show_error_details(error_msg):
+    """عرض تفاصيل الخطأ"""
+    with st.expander("🔍 التفاصيل"):
+        st.error(f"**السبب:**\n\n{error_msg}")
+        st.markdown(
+            "**الحل:** شغّل التطبيق محلياً:\n"
             "```bash\n"
             "pip install catt-tashkeel streamlit\n"
             "streamlit run app_streamlit.py\n"
@@ -132,44 +166,16 @@ else:
 
     st.markdown(
         '<div class="demo-notice">'
-        "💡 جرّب النماذج الجاهزة من الشريط الجانبي. "
-        "لتشكيل أي نص حر، شغّل التطبيق محلياً."
+        "💡 جرّب النماذج الجاهزة من الشريط الجانبي"
         "</div>",
         unsafe_allow_html=True,
     )
 
-st.markdown("")
 
-# ══════════════════════════════════════════════════════
-#          8. التبويبات الثلاثة
-# ══════════════════════════════════════════════════════
-tab1, tab2, tab3 = st.tabs(
-    ["✍️ تشكيل فوري", "📄 معالجة ملف", "ℹ️ معلومات"]
-)
-
-with tab1:
-    render_tab_tashkeel(diacritizer, IS_DEMO, strip_mode)
-
-with tab2:
-    render_tab_file(diacritizer, IS_DEMO)
-
-with tab3:
-    render_tab_info(diacritizer, MODEL_OK)
-
-# ══════════════════════════════════════════════════════
-#          9. الفوتر
-# ══════════════════════════════════════════════════════
-st.markdown("---")
-st.markdown("""
-<div class="app-footer">
-    <p>
-        ✍️ <strong>مُشكِّل النصوص العربية</strong>
-        &nbsp;|&nbsp; نموذج CATT للذكاء الاصطناعي
-    </p>
-    <p style="margin-top:0.3rem;">
-        صُنع بـ ❤️ للغة العربية &nbsp;|&nbsp;
-        <a href="https://github.com/GT-SALT/CATT"
-           target="_blank">GitHub</a>
-    </p>
-</div>
-""", unsafe_allow_html=True)
+# ══════════════════════════════════════════
+#    التشغيل
+# ══════════════════════════════════════════
+if __name__ == "__main__":
+    main()
+else:
+    main()
