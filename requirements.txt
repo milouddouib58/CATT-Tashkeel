@@ -1,8 +1,7 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch
-torchaudio
-transformers>=4.30.0
+transformers
 sentencepiece
 protobuf
 catt-tashkeel
-streamlit>=1.28.0
+streamlit
